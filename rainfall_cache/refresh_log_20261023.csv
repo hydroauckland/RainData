@@ -1,0 +1,7 @@
+"Label","station_no","ts_id","site_workbook","colour_code_error","profile_error","github_tree_error","rainfall_values","cumulative_values","current_rainfall_updated","current_cumulative_updated","rainfall_error","cumulative_error","average_values","selected_hydro_years","loaded_hydro_years","missing_hydro_years","average_updated","average_error"
+"Albert Park Acc rainfall","648719","648719~Rainfall.TOT2400","648719.xlsx","","","",115,1938,TRUE,TRUE,"","",365,"1972;1982;1997;2015;2019","1972;1982;1997;2015;2019","",TRUE,""
+"Mahurangi 2 RAWS","643627","643627~Rainfall.TOT2400","643627.xlsx","","","",115,1937,TRUE,TRUE,"","",365,"1972;1982;1997;2015;2019","1972;1982;1997;2015;2019","",TRUE,""
+"Orewa at Treatment Ponds","646619","646619~Rainfall.TOT2400","646619.xlsx","","Missing selected year columns: 1972","",115,1575,TRUE,TRUE,"","",365,"1972;1982;1997;2015;2019","1982;1997;2015;2019","1972",TRUE,"Missing selected year columns: 1972"
+"Wairoa at Hunua Nursery/Bowling Club","750010","750010~Rainfall.TOT2400","750010.xlsx","","Missing selected year columns: 1972","",115,1575,TRUE,TRUE,"","",365,"1972;1982;1997;2015;2019","1982;1997;2015;2019","1972",TRUE,"Missing selected year columns: 1972"
+"Waitangi at Diver Road","742736","742736~Rainfall.TOT2400","742736.xlsx","","","",115,1940,TRUE,TRUE,"","",365,"1972;1982;1997;2015;2019","1972;1982;1997;2015;2019","",TRUE,""
+"Whenuapai at Airbase","647601","647601~Rainfall.TOT2400","647601.xlsx","","","",115,1936,TRUE,TRUE,"","",365,"1972;1982;1997;2015;2019","1972;1982;1997;2015;2019","",TRUE,""
