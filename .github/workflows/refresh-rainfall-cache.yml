@@ -2,8 +2,9 @@ name: Refresh Auckland rainfall cache
 
 on:
   schedule:
-    # 18:17 UTC = about 07:17 in NZ daylight time / 06:17 in NZ standard time.
-    - cron: '17 18 * * *'
+    # Runs daily at approximately 07:17 NZ daylight time
+    # or 06:17 NZ standard time.
+    - cron: "17 18 * * *"
   workflow_dispatch:
 
 permissions:
@@ -21,15 +22,65 @@ jobs:
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: 'release'
+          r-version: "release"
           use-public-rspm: true
 
       - name: Install R packages
         run: |
-          install.packages(
-            c("readxl", "rvest", "dplyr", "lubridate", "jsonlite"),
-            repos = "https://cloud.r-project.org"
+          repos <- c(
+            Auckland = "https://cran.stat.auckland.ac.nz",
+            CRAN = "https://cloud.r-project.org"
           )
+
+          options(repos = repos)
+
+          required_packages <- c(
+            "readxl",
+            "rvest",
+            "dplyr",
+            "lubridate",
+            "jsonlite"
+          )
+
+          missing_packages <- required_packages[
+            !vapply(
+              required_packages,
+              requireNamespace,
+              logical(1),
+              quietly = TRUE
+            )
+          ]
+
+          if (length(missing_packages) > 0) {
+            message(
+              "Installing packages: ",
+              paste(missing_packages, collapse = ", ")
+            )
+
+            install.packages(
+              missing_packages,
+              repos = repos,
+              dependencies = TRUE
+            )
+          }
+
+          missing_after_install <- required_packages[
+            !vapply(
+              required_packages,
+              requireNamespace,
+              logical(1),
+              quietly = TRUE
+            )
+          ]
+
+          if (length(missing_after_install) > 0) {
+            stop(
+              "Failed to install required packages: ",
+              paste(missing_after_install, collapse = ", ")
+            )
+          }
+
+          message("All required R packages are available.")
         shell: Rscript {0}
 
       - name: Refresh station data from KiWIS and rainfall_sites
@@ -44,7 +95,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add -f rainfall_cache/
+
           if git diff --cached --quiet; then
             echo "No cache changes to commit."
           else
