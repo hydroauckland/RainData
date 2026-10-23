@@ -1,0 +1,53 @@
+name: Refresh Auckland rainfall cache
+
+on:
+  schedule:
+    # 18:17 UTC = about 07:17 in NZ daylight time / 06:17 in NZ standard time.
+    - cron: '17 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out RainData repository
+        uses: actions/checkout@v7
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R packages
+        run: |
+          install.packages(
+            c("readxl", "rvest", "dplyr", "lubridate", "jsonlite"),
+            repos = "https://cloud.r-project.org"
+          )
+        shell: Rscript {0}
+
+      - name: Refresh station data from KiWIS and rainfall_sites
+        run: Rscript refresh_rainfall_cache_github_profiles_fixed.R
+        env:
+          RAINFALL_CACHE_DIR: ${{ github.workspace }}/rainfall_cache
+          RAINFALL_GITHUB_OWNER: hydroauckland
+          RAINFALL_GITHUB_REPO: rainfall_sites
+          RAINFALL_GITHUB_BRANCH: main
+
+      - name: Commit updated cache files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f rainfall_cache/
+          if git diff --cached --quiet; then
+            echo "No cache changes to commit."
+          else
+            git commit -m "Refresh rainfall cache"
+            git push
+          fi
