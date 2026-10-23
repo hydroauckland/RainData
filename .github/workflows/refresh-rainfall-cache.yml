@@ -2,7 +2,7 @@ name: Refresh Auckland rainfall cache
 
 on:
   schedule:
-    # 18:17 UTC = about 07:17 in NZ daylight time / 06:17 in NZ standard time.
+    # Runs daily at approximately 07:17 NZ daylight time / 06:17 NZ standard time.
     - cron: '17 18 * * *'
   workflow_dispatch:
 
@@ -11,103 +11,100 @@ permissions:
 
 jobs:
   refresh:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Pin the Linux image so runner-image changes are less likely to affect builds.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
 
     steps:
       - name: Check out RainData repository
         uses: actions/checkout@v7
 
+      - name: Install system libraries needed by R source packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            gfortran \
+            pkg-config \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            libxml2-dev \
+            libicu-dev
+
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: 'release'
-          use-public-rspm: true
+          use-public-rspm: false
 
-      - name: Install dependencies and rvest directly from CRAN
+      - name: Install packages sequentially from official CRAN source
         run: |
-          repos <- c(
-            Auckland = "https://cran.stat.auckland.ac.nz",
-            CRAN = "https://cloud.r-project.org"
-          )
-          options(repos = repos)
-
-          # Install rvest's imported dependencies and the other packages
-          # used by the rainfall cache refresher from CRAN repositories.
-          packages_needed <- c(
-            "readxl", "dplyr", "lubridate", "jsonlite",
-            "cli", "glue", "httr", "lifecycle", "magrittr",
-            "rlang", "selectr", "tibble", "xml2"
+          CRAN <- 'https://cran.r-project.org'
+          options(
+            repos = c(CRAN = CRAN),
+            timeout = 600,
+            download.file.method = 'libcurl'
           )
 
-          install.packages(
-            packages_needed,
-            repos = repos,
-            dependencies = NA
+          # Install the core dependencies first so that a problem is reported
+          # under the package that actually fails (for example curl or openssl),
+          # rather than only reporting that httr could not be installed.
+          packages <- c(
+            'R6',
+            'mime',
+            'jsonlite',
+            'curl',
+            'openssl',
+            'httr',
+            'readxl',
+            'dplyr',
+            'lubridate',
+            'rvest'
           )
 
-          missing_dependencies <- packages_needed[
-            !vapply(
-              packages_needed,
-              requireNamespace,
-              logical(1),
-              quietly = TRUE
+          install_one_from_cran <- function(pkg) {
+            message('==================================================')
+            message('INSTALLING FROM CRAN SOURCE: ', pkg)
+            message('CRAN repository: ', CRAN)
+
+            utils::install.packages(
+              pkgs = pkg,
+              repos = CRAN,
+              type = 'source',
+              dependencies = NA,
+              Ncpus = 2
             )
+
+            if (!requireNamespace(pkg, quietly = TRUE)) {
+              stop(
+                'PACKAGE_INSTALL_FAILED: ', pkg,
+                '. Review the installation output immediately above this message.'
+              )
+            }
+
+            message(
+              'PACKAGE_OK: ', pkg,
+              ' version ', as.character(utils::packageVersion(pkg))
+            )
+          }
+
+          for (pkg in packages) {
+            install_one_from_cran(pkg)
+          }
+
+          # Explicit final check for everything directly used by the refresh script.
+          required_packages <- c('readxl', 'rvest', 'dplyr', 'lubridate', 'jsonlite')
+          missing <- required_packages[
+            !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
           ]
-
-          if (length(missing_dependencies) > 0) {
-            stop(
-              "These dependencies failed to install: ",
-              paste(missing_dependencies, collapse = ", ")
-            )
+          if (length(missing) > 0L) {
+            stop('Required packages failed final load check: ', paste(missing, collapse = ', '))
           }
 
-          # Download the actual CRAN source archive, not the HTML index page.
-          rvest_url <- paste0(
-            "https://cran.r-project.org/src/contrib/",
-            "rvest_1.0.5.tar.gz"
-          )
-          rvest_tarball <- tempfile(fileext = ".tar.gz")
-
-          download.file(
-            rvest_url,
-            destfile = rvest_tarball,
-            mode = "wb",
-            method = "libcurl",
-            quiet = FALSE
-          )
-
-          if (!file.exists(rvest_tarball) || file.info(rvest_tarball)$size <= 0) {
-            stop("The direct rvest CRAN download failed: ", rvest_url)
+          message('All required packages loaded. Installed package versions:')
+          for (pkg in c(required_packages, 'httr', 'curl', 'openssl')) {
+            message('  ', pkg, ': ', as.character(utils::packageVersion(pkg)))
           }
-
-          # Install rvest from the downloaded source archive.
-          install.packages(
-            rvest_tarball,
-            repos = NULL,
-            type = "source"
-          )
-
-          required_packages <- c(
-            "readxl", "rvest", "dplyr", "lubridate", "jsonlite"
-          )
-          missing_packages <- required_packages[
-            !vapply(
-              required_packages,
-              requireNamespace,
-              logical(1),
-              quietly = TRUE
-            )
-          ]
-
-          if (length(missing_packages) > 0) {
-            stop(
-              "Required packages unavailable after installation: ",
-              paste(missing_packages, collapse = ", ")
-            )
-          }
-
-          message("All required packages installed successfully.")
         shell: Rscript {0}
 
       - name: Refresh station data from KiWIS and rainfall_sites
@@ -120,14 +117,12 @@ jobs:
 
       - name: Commit updated cache files
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f rainfall_cache/
-
           if git diff --cached --quiet; then
-            echo "No cache changes to commit."
+            echo 'No cache changes to commit.'
           else
-            git commit -m "Refresh rainfall cache"
+            git commit -m 'Refresh rainfall cache'
             git push
           fi
